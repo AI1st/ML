@@ -40,6 +40,7 @@ class Train:
     # 2. 显示返回的总误差有误
     # 3. 考虑关于pytorch传播模式的问题(预测模式或训练模式)
     # 4. 考虑total_loss改名为loss_in_single_batch的问题
+    # 5. 考虑修改从Common中引入plot的问题，改为直接从function中引入
     def __init__(self, model, optimizer, loss=None):
         """
         函数API按照模型、损失、优化(数据流动的方式)
