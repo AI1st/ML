@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.utils.data as Data
 from functools import wraps
-from graph_plot import plot
+from Common.function.graph_plot import plot
 import random
 
 
@@ -35,6 +35,11 @@ def train(data_set, model, loss, optimizer, epoch_num, batch_range=(50, 50), ran
 
 
 class Train:
+    # 尚且存在的问题：
+    # 1. 每个epoch的误差计算有误
+    # 2. 显示返回的总误差有误
+    # 3. 考虑关于pytorch传播模式的问题(预测模式或训练模式)
+    # 4. 考虑total_loss改名为loss_in_single_batch的问题
     def __init__(self, model, optimizer, loss=None):
         """
         函数API按照模型、损失、优化(数据流动的方式)
@@ -47,6 +52,7 @@ class Train:
         self.loss = loss
         # 参数初始化
         self.train_ls = []
+        self.train_ls_temp = []
 
     def __call__(self, data_set, epoch_num, batch_range=(50, 50), rand=False):  # train
         """
@@ -71,7 +77,8 @@ class Train:
             l = self.single_epoch(data_iter)
             train_ls.append(l.detach().mean())
         print(f"training loss: {train_ls[-1]}")
-        self.train_ls = [*self.train_ls, *train_ls]
+        self.train_ls = [*self.train_ls, *train_ls]  # 合并训练记录
+        self.train_ls_temp = train_ls
         self.plot_history()
         return self.train_ls
 
@@ -99,7 +106,10 @@ class Train:
         return l
 
     def plot_history(self):
-        plot(np.array(range(len(self.train_ls))), [self.train_ls], xlabel="epoch", ylabel="train_loss",
+        plot(np.array(range(len(self.train_ls_temp))) + len(self.train_ls) - len(self.train_ls_temp) + 1,
+             [self.train_ls_temp], xlabel="epoch", ylabel="train_loss",
+             title=f"training history")
+        plot(np.array(range(len(self.train_ls))) + 1, [self.train_ls], xlabel="epoch", ylabel="train_loss",
              title=f"training history")
 
     def reset_optimizer(self, optimizer):
