@@ -1,9 +1,25 @@
+import random
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.utils.data as Data
-from functools import wraps
-from Common.function.graph_plot import plot
-import random
+
+
+def plot(x, ys, labels=None, xlabel="", ylabel="", title=""):
+    # 判断ys是否为容器类型变量(判断ys是否传入了多变量)
+    if not isinstance(ys, (list, tuple, set, dict)):
+        ys = [ys]
+        labels = [labels]
+    # 判断标签是否为空
+    if labels is None:
+        labels = [""] * len(ys)
+    fig, ax = plt.subplots()
+    for y, label in zip(ys, labels):
+        ax.plot(x, y, label=label)
+    ax.set_xlabel(xlabel)  # 设置x轴名称 x label
+    ax.set_ylabel(ylabel)  # 设置y轴名称 y label
+    ax.set_title(title)  # 设置图名为Simple Plot
+    ax.legend()  # 自动检测要在图例中显示的元素，并且显示
 
 
 def train(data_set, model, loss, optimizer, epoch_num, batch_range=(50, 50), rand=False):
@@ -34,13 +50,22 @@ def train(data_set, model, loss, optimizer, epoch_num, batch_range=(50, 50), ran
     return train_ls
 
 
+class Accumulator:
+    # 此类来自于d2l包，为累加器类
+    def __init__(self, n):
+        self.data = [0.0] * n
+
+    def add(self, *args):
+        self.data = [a + float(b) for a, b in zip(self.data, args)]
+
+    def reset(self):
+        self.data = [0.0] * len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+
 class Train:
-    # 尚且存在的问题：
-    # 1. 每个epoch的误差计算有误
-    # 2. 显示返回的总误差有误
-    # 3. 考虑关于pytorch传播模式的问题(预测模式或训练模式)
-    # 4. 考虑total_loss改名为loss_in_single_batch的问题
-    # 5. 考虑修改从Common中引入plot的问题，改为直接从function中引入
     def __init__(self, model, optimizer, loss=None):
         """
         函数API按照模型、损失、优化(数据流动的方式)
@@ -54,6 +79,7 @@ class Train:
         # 参数初始化
         self.train_ls = []
         self.train_ls_temp = []
+        self.total_number_of_samples = None
 
     def __call__(self, data_set, epoch_num, batch_range=(50, 50), rand=False):  # train
         """
@@ -63,39 +89,52 @@ class Train:
         :param rand:是否在迭代过程中随机生成迭代器
         :return: 训练历史记录
         """
+        print("testing 01")  # 测试标记
         return self.train(data_set, epoch_num, batch_range, rand)
 
     def train(self, data_set, epoch_num, batch_range, rand=False):
-        l = None  # 初始化loss
-        train_ls = []
-        if isinstance(batch_range, int):  # 若传入一个整数，则将其打包为元组
-            batch_range = (batch_range, batch_range)
-
-        data_iter = Data.DataLoader(data_set, batch_size=random.randint(*batch_range), shuffle=True)
-        for epoch in range(epoch_num):
-            if rand:
-                data_iter = Data.DataLoader(data_set, batch_size=random.randint(*batch_range), shuffle=True)
-            l = self.single_epoch(data_iter)
-            train_ls.append(l.detach().mean())
-        print(f"training loss: {train_ls[-1]}")
+        self.total_number_of_samples = len(data_set)
+        # 训练
+        train_ls = self.multi_epoch(data_set, epoch_num, batch_range, rand)
+        # 计算全局损失
+        total_loss = self.multi_epoch(data_set, 1, len(data_set), False)
+        # 训练记录输出
+        print(f"training loss: {total_loss[0]}")
         self.train_ls = [*self.train_ls, *train_ls]  # 合并训练记录
         self.train_ls_temp = train_ls
         self.plot_history()
         return self.train_ls
 
+    def multi_epoch(self, data_set, epoch_num, batch_range, rand):
+        # 初始化及用户及初始判定
+        train_ls = []
+        if isinstance(batch_range, int):  # 若传入一个整数，则将其打包为元组
+            batch_range = (batch_range, batch_range)
+        # 获得数据集
+        data_iter = Data.DataLoader(data_set, batch_size=random.randint(*batch_range), shuffle=True)
+        for epoch in range(epoch_num):
+            if rand:  # 判断是否要重新生成数据集
+                data_iter = Data.DataLoader(data_set, batch_size=random.randint(*batch_range), shuffle=True)
+            loss_in_one_epoch = self.single_epoch(data_iter)
+            train_ls.append(loss_in_one_epoch)
+        return train_ls
+
     def single_epoch(self, data_iter):
+        metric = Accumulator(2)  # 第一项为累加次数，第二项为总误差
         for k in data_iter:
             l = self.single_batch(*k)  # 此时k为列表，通过*拆包
-            return l
+            metric.add(1, l.detach().sum())
+        loss_in_one_epoch = metric[1] / self.total_number_of_samples
+        return loss_in_one_epoch
 
     def single_batch(self, *k):  # 不限输入的参数
         self.optimizer.zero_grad()
-        l = self.total_loss(*k)  # 此时k为元组，通过*k拆包
+        l = self.loss_in_single_batch(*k)  # 此时k为元组，通过*k拆包
         l.mean().backward()
         self.optimizer.step()
         return l
 
-    def total_loss(self, x, y):  # 默认的计算损失方式
+    def loss_in_single_batch(self, x, y):  # 默认的计算损失方式
         """
         当需要修改最终的代价函数(例如增加正则项时可以重写此方法)
         :param x: 从迭代器中拿出来数据的第一维
