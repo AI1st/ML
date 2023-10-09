@@ -1,3 +1,4 @@
+import time
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -65,6 +66,37 @@ class Accumulator:
         return self.data[idx]
 
 
+class Timer:
+    # 此类来自于d2l包，为计时器
+    def __init__(self):
+        self.times = []
+        self.tik = None
+
+        self.start()
+
+    def start(self):
+        """启动计时器"""
+        self.tik = time.time()
+
+    def stop(self):
+        """停止计时，并将时间加至列表"""
+        tok = time.time()
+        self.times.append(tok - self.tik)
+        return self.times[-1]
+
+    def avg(self):
+        """返回平均时间"""
+        return sum(self.times) / len(self.times)
+
+    def sum(self):
+        """返回总时间"""
+        return sum(self.times)
+
+    def cumsum(self):
+        """返回累加时间列表"""
+        return np.array(self.times).cumsum().tolist()
+
+
 class Train:
     def __init__(self, model, optimizer, loss=None):
         """
@@ -80,32 +112,41 @@ class Train:
         self.train_ls = []
         self.train_ls_temp = []
         self.total_number_of_samples = None
+        self.times = []
 
-    def __call__(self, data_set, epoch_num, batch_range=(50, 50), rand=False):  # train
+    def __call__(self, data_set, epoch_num, batch_range=(50, 50), rand=False, test_set=None):  # train
         """
         :param data_set:由数据特征和数据标签构成
         :param epoch_num:迭代次数
         :param batch_range:单batch范围
         :param rand:是否在迭代过程中随机生成迭代器
+        :param test_set:传入测试集
         :return: 训练历史记录
         """
-        print("testing 01")  # 测试标记
-        return self.train(data_set, epoch_num, batch_range, rand)
+        print("testing 03")  # 测试标记
+        return self.train(data_set, epoch_num, batch_range, rand, test_set)
 
-    def train(self, data_set, epoch_num, batch_range, rand=False):
+    def train(self, data_set, epoch_num, batch_range, rand=False, test_set=None):
+        test_loss = ["undefined"]
         self.total_number_of_samples = len(data_set)
         # 训练
-        train_ls = self.multi_epoch(data_set, epoch_num, batch_range, rand)
+        timer = Timer()
+        train_ls = self.multi_epoch(data_set, epoch_num, batch_range, rand, True)
+        train_time = timer.stop()
+        self.times = timer.times
         # 计算全局损失
-        total_loss = self.multi_epoch(data_set, 1, len(data_set), False)
+        total_loss = self.multi_epoch(data_set, 1, len(data_set), False, False)
+        # 计算测试集损失
+        if test_set:
+            test_loss = self.multi_epoch(test_set, 1, len(data_set), False, False)
         # 训练记录输出
-        print(f"training loss: {total_loss[0]}")
+        print(f"training loss: {total_loss[0]}, test loss: {test_loss[0]} training time: {train_time}")
         self.train_ls = [*self.train_ls, *train_ls]  # 合并训练记录
         self.train_ls_temp = train_ls
         self.plot_history()
         return self.train_ls
 
-    def multi_epoch(self, data_set, epoch_num, batch_range, rand):
+    def multi_epoch(self, data_set, epoch_num, batch_range, rand, train_flag):
         # 初始化及用户及初始判定
         train_ls = []
         if isinstance(batch_range, int):  # 若传入一个整数，则将其打包为元组
@@ -115,23 +156,24 @@ class Train:
         for epoch in range(epoch_num):
             if rand:  # 判断是否要重新生成数据集
                 data_iter = Data.DataLoader(data_set, batch_size=random.randint(*batch_range), shuffle=True)
-            loss_in_one_epoch = self.single_epoch(data_iter)
+            loss_in_one_epoch = self.single_epoch(data_iter, train_flag)
             train_ls.append(loss_in_one_epoch)
         return train_ls
 
-    def single_epoch(self, data_iter):
+    def single_epoch(self, data_iter, train_flag):
         metric = Accumulator(2)  # 第一项为累加次数，第二项为总误差
         for k in data_iter:
-            l = self.single_batch(*k)  # 此时k为列表，通过*拆包
+            l = self.single_batch(train_flag, *k)  # 此时k为列表，通过*拆包
             metric.add(1, l.detach().sum())
         loss_in_one_epoch = metric[1] / self.total_number_of_samples
         return loss_in_one_epoch
 
-    def single_batch(self, *k):  # 不限输入的参数
+    def single_batch(self, train_flag, *k):  # 不限输入的参数
         self.optimizer.zero_grad()
         l = self.loss_in_single_batch(*k)  # 此时k为元组，通过*k拆包
-        l.mean().backward()
-        self.optimizer.step()
+        if train_flag:
+            l.mean().backward()
+            self.optimizer.step()
         return l
 
     def loss_in_single_batch(self, x, y):  # 默认的计算损失方式
