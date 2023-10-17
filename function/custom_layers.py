@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 
-class relpu(nn.Module):
+class Relpu(nn.Module):
     # version1
     def __init__(self):
         super().__init__()

@@ -37,8 +37,8 @@ def get_neuron_params(input_shape, connected_nums):
     # 1.生成全零张量：
     zeros_filter = torch.zeros(input_shape)
     # 2.生成初始权重矩阵和偏置
-    init_weights = torch.randn(input_shape)
-    init_bias = torch.randn(input_shape)
+    init_weights = torch.normal(0, 0.01, size=input_shape)
+    init_bias = torch.normal(0, 0.01, size=input_shape)
     # 3.选择中心：
     center = generate_center(input_shape)
     # print(center)
@@ -51,9 +51,6 @@ def get_neuron_params(input_shape, connected_nums):
 
 
 def generate_neuron_layer(input_shape, output_structure, focus_points):
-    # 生成两个四维张量
-    weights_layer = torch.zeros(*output_structure, *input_shape)
-    bias_layer = torch.zeros(*output_structure, *input_shape)
     # 获得neuron
     neurons = []
     # 执行output_structure总数次循环,生成neurons
@@ -78,11 +75,31 @@ def generate_neuron_layer(input_shape, output_structure, focus_points):
     return layer_weights, layer_bias
 
 
-class NeuronLayer(nn.Module):
+def generate_neuron_layer_v2(input_shape, output_structure, focus_points):
+    # 执行output_structure总数次循环,生成neurons
+    total_elements = torch.prod(torch.tensor(output_structure))
+    neurons = [get_neuron_params(input_shape, focus_points) for _ in range(total_elements)]
+    # 将neurons按照坐标排序
+    neurons.sort(key=lambda x: x[2])
+    # 获得权重张量和偏置张量
+    weights_list = [n[0] for n in neurons]
+    bias_list = [n[1] for n in neurons]
+    layer_weights = torch.stack(weights_list)
+    layer_weights = layer_weights.view(*output_structure, *input_shape)
+    layer_bias = torch.stack(bias_list)
+    layer_bias = layer_bias.view(*output_structure, *input_shape)
+
+    return layer_weights, layer_bias
+
+
+class NeuronLayerNoBatch(nn.Module):
     def __init__(self, input_shape, output_structure, focus_points):
         super().__init__()
         self.input_shape = input_shape
-        self.output_structure = output_structure
+        if isinstance(output_structure, int):
+            self.output_structure = (output_structure,)
+        else:
+            self.output_structure = output_structure
         self.dim_format = self.get_input_dim_format()
         self.weights, self.bias = generate_neuron_layer(input_shape, output_structure, focus_points)
         self.weights = nn.Parameter(self.weights)
@@ -90,6 +107,34 @@ class NeuronLayer(nn.Module):
 
     def forward(self, x):
         return torch.sum(x * self.weights + self.bias, dim=self.dim_format)
+
+    def get_input_dim_format(self):
+        data_dim = len(self.input_shape)
+        dim_format = []
+        for i in range(data_dim):
+            k = -i - 1
+            dim_format.append(k)
+        return tuple(dim_format)
+
+
+class NeuronLayer(nn.Module):
+    def __init__(self, input_shape, output_structure, focus_points):
+        super().__init__()
+        self.input_shape = input_shape
+        self.input_dim = torch.zeros(input_shape).dim()
+        if isinstance(output_structure, int):
+            self.output_structure = (output_structure,)
+        else:
+            self.output_structure = output_structure
+        self.dim_format = self.get_input_dim_format()
+        self.weights, self.bias = generate_neuron_layer(input_shape, self.output_structure, focus_points)
+        self.weights = nn.Parameter(self.weights.unsqueeze(-self.input_dim - 1))
+        self.bias = nn.Parameter(self.bias.unsqueeze(-self.input_dim - 1))
+
+    def forward(self, x):
+        if len(x.shape) == self.input_dim:
+            x = x.unsqueeze(0)
+        return torch.sum(x * self.weights + self.bias, dim=self.dim_format).transpose(0, -1)
 
     def get_input_dim_format(self):
         data_dim = len(self.input_shape)
