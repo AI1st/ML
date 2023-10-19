@@ -97,7 +97,7 @@ def get_connections_index(input_shape, neurons, focus, intensity_index=1.2):
     return connections_index_flatten_output.to(torch.int64), int_connections_index_reshape_clamped.shape  # 转换int64
 
 
-class LimitedAttentionLayer(nn.Module):
+class LimitedAttentionLayerCpu(nn.Module):
     def __init__(self, input_shape, output_shape, focus, intensity=1.2):
         super().__init__()
         # 思路:
@@ -160,3 +160,70 @@ class LimitedAttentionLayer(nn.Module):
         y = y_without_shape.reshape(batch_s, *self.output_shape)
 
         return y
+
+
+class LimitedAttentionLayer(nn.Module):
+    def __init__(self, input_shape, output_shape, focus, intensity=1.2):
+        super().__init__()
+        # 思路:
+        # 1.创建索引张量
+        # 2.创建权重张量及偏置张量
+        # 3.生成保存含batch的索引字典
+        # 4.定义前向传播
+        # 基本输入输出尺寸初始化
+        assert isinstance(input_shape, tuple), "input_shape should be tuple!"
+        assert isinstance(output_shape, tuple), "output_shape should be tuple!"
+        self.input_shape = input_shape
+        self.output_shape = output_shape
+
+        # 1.创建索引张量
+        # 1.1计算生成的neuron个数
+        neurons = reduce(mul, output_shape)
+        self.register_buffer("neurons", tensor([neurons]))  # 注册为模型内部常量
+        # 1.2生成随机张量
+        connections_index, index_shape = get_connections_index(input_shape, neurons, focus, intensity_index=intensity)
+        # 1.3注册为模型内部常量
+        self.register_buffer("connections_index_numel", tensor([connections_index.numel()]))
+        self.register_buffer("connections_index_standard", connections_index)
+        self.register_buffer("index_shape", tensor([connections_index.shape]))
+
+        # 2.生成权重张量及偏置张量
+        self.weights = nn.Parameter(torch.randn(neurons, focus))
+        self.bias = nn.Parameter(torch.randn(neurons))
+
+    def forward(self, x):
+        assert x.shape[1:] == self.input_shape or x.shape[0:] == self.input_shape \
+            , "the shape of input is not corresponding to the shape of index!"
+
+        # 判断是推理模式还是batch模式
+        are_equal = all(a == b for a, b in zip(x.shape, self.input_shape))
+        if are_equal:  # 推理模式：
+            x = x.reshape(1, x.numel())
+            batch_s = 1
+        else:  # batch模式：
+            batch_s = x.shape[0]
+
+        # 判断flatten_index_batch是否已经生成
+        if hasattr(self, f'{batch_s}'):
+            flatten_index_batch = getattr(self, f"{batch_s}")  # 获取由register_buffer注册的batch_s索引
+            print("getting index from class variable")  # used for test
+        else:
+            flatten_index = getattr(self, "connections_index_standard").reshape(1, self.connections_index_numel)
+            flatten_index_batch = flatten_index.repeat(batch_s, 1).reshape(batch_s, flatten_index.numel())
+            self.register_buffer(f"{batch_s}", flatten_index_batch)  # 注册为模型内部常量
+            flatten_index_batch = getattr(self, f"{batch_s}")
+            print("generating index")  # used for test
+
+        # 前向传播
+        x_flatten = torch.flatten(x, start_dim=1)
+        x_selected = torch.gather(x_flatten, 1, flatten_index_batch)
+        x_element_wise_product = x_selected.reshape(batch_s, *self.weights.shape) * self.weights
+        x_sum_at_dim_n1 = x_element_wise_product.sum(dim=-1)
+        y_without_shape = x_sum_at_dim_n1 + self.bias
+        y = y_without_shape.reshape(batch_s, *self.output_shape)
+
+        return y
+
+    def load_input_and_output_size(self, input_shape, output_shape, ):  # used for loading model from dict
+        self.input_shape = input_shape
+        self.output_shape = output_shape
