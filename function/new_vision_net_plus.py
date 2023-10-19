@@ -11,9 +11,7 @@ def get_centers_flatten(input_shape, focus):
         , "input_shape should be a list type, tuple type or torch.Tensor type!"
 
     # 1.展平输入维度
-    flatten_len = 1
-    for i in input_shape:
-        flatten_len *= i
+    flatten_len = reduce(mul, input_shape)
 
     # 2.在展平的输入维度中随机取center
     centers = torch.randint(0, flatten_len, (focus,))
