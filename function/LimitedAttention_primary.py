@@ -134,6 +134,7 @@ class NeuronLayer(nn.Module):
     def forward(self, x):
         if len(x.shape) == self.input_dim:
             x = x.unsqueeze(0)
+        # print(torch.sum(x * self.weights + self.bias, dim=self.dim_format).transpose(0, -1))
         return torch.sum(x * self.weights + self.bias, dim=self.dim_format).transpose(0, -1)
 
     def get_input_dim_format(self):

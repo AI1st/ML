@@ -86,18 +86,3 @@ class Relpu3(nn.Module):
 
     def weight_decay(self, n1, n2):
         return n1 * (self.weight_a.detach() ** 2).sum() + n2 * (self.weight_b.detach() ** 2).sum()
-
-
-class Relpu4(nn.Module):
-    # version4
-    def __init__(self):
-        super().__init__()
-        self.weight_a = nn.Parameter(0.01 * (torch.randn(1)))
-        self.weight_b = nn.Parameter(0.01 * (torch.randn(1)) + 1)
-
-    def forward(self, x):
-        x = relpu(x, self.weight_a, self.weight_b)
-        return x
-
-    def weight_decay(self, n1, n2):
-        return n1 * (self.weight_a.detach() ** 2).sum() + n2 * (self.weight_b.detach() ** 2).sum()
