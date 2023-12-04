@@ -175,7 +175,7 @@ def train_relpu_like_v3_gpus(net, train_iter, test_iter, num_epochs, lr, num_gpu
     print(f'loss {train_l:.3f}, train acc {train_acc:.3f}, '
           f'test acc {test_acc:.3f}')
     print(f'{metric[2] * num_epochs / timer.sum():.1f} examples/sec '
-          f'on {str(*devices)}')
+          f'on ', *devices)
 
     if save is True:
         train_acc_s = train_acc * 1000
