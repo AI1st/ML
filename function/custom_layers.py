@@ -101,3 +101,13 @@ class Relpu4(nn.Module):
 
     def weight_decay(self, n1, n2):
         return n1 * (self.weight_a.detach() ** 2).sum() + n2 * (self.weight_b.detach() ** 2).sum()
+
+
+def init_relpus(u_a, u_b, sigma_a, sigma_b):
+    def init(m):
+        if type(m) == Relpu3:
+            m.weight_a, m.weight_b = nn.Parameter(u_a + sigma_a * torch.randn(1)), nn.Parameter(
+                u_b + torch.randn(1) * sigma_b)
+            print("yeah!")
+
+    return init

@@ -16,8 +16,8 @@ def plot_activation_function(model, sequence, deep, device):
     y_n = model(x_n).detach().cpu()
     x_w = x_w.cpu()
     x_n = x_n.cpu()
-    error_w = compute_error_from_linear(x_w,y_w)
-    error_n = compute_error_from_linear(x_n,y_n)
+    error_w = compute_error_from_linear(x_w, y_w)
+    error_n = compute_error_from_linear(x_n, y_n)
     params = [str(round(i.detach().float().item(), 3)) for i in model.parameters()]
     plot(x_w, y_w, xlabel="input", ylabel="output",
          title=f"deep:{deep}, layer:{sequence}, error:{round(error_w.item(), 3)},\n p:{', '.join(params)}")
@@ -34,5 +34,36 @@ def show_activation(model, activation, deep=0, device=d2l.try_gpu()):
         else:
             try:
                 show_activation(layer, activation, deep + 1)
+            except Exception as e:
+                pass
+
+
+def plot_activation_function_v2(model, sequence, deep, device, range_wide, range_narrow):
+    x_w = torch.linspace(range_wide[0], range_wide[1], 500, device=device)
+    x_n = torch.linspace(range_narrow[0], range_narrow[1], 100, device=device)
+    y_w = model(x_w).detach().cpu()
+    y_n = model(x_n).detach().cpu()
+    x_w = x_w.cpu()
+    x_n = x_n.cpu()
+    error_w = compute_error_from_linear(x_w, y_w)
+    error_n = compute_error_from_linear(x_n, y_n)
+    params = [str(round(i.detach().float().item(), 3)) for i in model.parameters()]
+    plot(x_w, y_w, xlabel="input", ylabel="output",
+         title=f"deep:{deep}, layer:{sequence}, error:{round(error_w.item(), 3)},\n p:{', '.join(params)}")
+    plot(x_n, y_n, xlabel="input", ylabel="output",
+         title=f"deep:{deep}, layer:{sequence}, error:{round(error_n.item(), 3)},\n p:{', '.join(params)}")
+
+
+def show_activation_v2(model, activation, range_wide=[-2, 2], range_narrow=[-1, 1], deep=0, device=d2l.try_gpu()):
+    if range_wide is None:
+        range_wide = [-2, 2]
+    i = 1
+    for layer in model:
+        if isinstance(layer, activation):
+            plot_activation_function_v2(layer, i, deep, device=device, range_wide=range_wide, range_narrow=range_narrow)
+            i += 1
+        else:
+            try:
+                show_activation_v2(layer, activation, range_wide, range_narrow, deep + 1)
             except Exception as e:
                 pass
