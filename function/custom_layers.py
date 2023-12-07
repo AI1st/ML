@@ -108,6 +108,5 @@ def init_relpus(u_a, u_b, sigma_a, sigma_b):
         if type(m) == Relpu3:
             m.weight_a, m.weight_b = nn.Parameter(u_a + sigma_a * torch.randn(1)), nn.Parameter(
                 u_b + torch.randn(1) * sigma_b)
-            print("yeah!")
 
     return init
