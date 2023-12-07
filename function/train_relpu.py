@@ -255,30 +255,25 @@ def train_relpu_like_v4(net, train_iter, test_iter, num_epochs, lr, device,
             X, y = X.to(device), y.to(device)
             y_hat = net(X)
             # 增加了对激活函数的正则项
-            l = loss(y_hat, y) + rt_for_activation_function_v4(net, Relpu3,
-                                                               a_control,
-                                                               b_control1, b_control2, b_control3)
+            rt = rt_for_activation_function_v4(net.module, Relpu3,
+                                               a_control,
+                                               b_control1, b_control2, b_control3)
+            loss_only = loss(y_hat, y)
+            l = loss_only + rt
             l.backward()
             optimizer.step()
 
             with torch.no_grad():
-                metric.add(l * X.shape[0], d2l.accuracy(y_hat, y), X.shape[0])
+                # 仅仅使用无rt的loss，避免其影响最终的误差衡量
+                metric.add(loss_only * X.shape[0], d2l.accuracy(y_hat, y), X.shape[0])
             timer.stop()
-            # 从error中扣除激活函数正则项，避免其影响最终的误差衡量
-            train_l = metric[0] / metric[2] - rt_for_activation_function_v4(net, Relpu3,
-                                                                            a_control,
-                                                                            b_control1, b_control2, b_control3)
+            train_l = metric[0] / metric[2]
             train_acc = metric[1] / metric[2]
             if (i + 1) % (num_batches // 5) == 0 or i == num_batches - 1:
                 animator.add(epoch + (i + 1) / num_batches,
                              (train_l, train_acc, None))
         test_acc = d2l.evaluate_accuracy_gpu(net, test_iter)
         animator.add(epoch + 1, (None, None, test_acc))
-
-    print(f'loss {train_l:.3f}, train acc {train_acc:.3f}, '
-          f'test acc {test_acc:.3f}')
-    print(f'{metric[2] * num_epochs / timer.sum():.1f} examples/sec '
-          f'on {str(device)}')
 
     if save is True:
         train_acc_s = train_acc * 1000
@@ -334,19 +329,19 @@ def train_relpu_like_v4_gpus(net, train_iter, test_iter, num_epochs, lr, num_gpu
             X, y = X.to(devices[0]), y.to(devices[0])
             y_hat = net(X)
             # 增加了对激活函数的正则项
-            l = loss(y_hat, y) + rt_for_activation_function_v4(net.module, Relpu3,
-                                                               a_control,
-                                                               b_control1, b_control2, b_control3)
+            rt = rt_for_activation_function_v4(net.module, Relpu3,
+                                               a_control,
+                                               b_control1, b_control2, b_control3)
+            loss_only = loss(y_hat, y)
+            l = loss_only + rt
             l.backward()
             optimizer.step()
 
             with torch.no_grad():
-                metric.add(l * X.shape[0], d2l.accuracy(y_hat, y), X.shape[0])
+                # 仅仅使用无rt的loss，避免其影响最终的误差衡量
+                metric.add(loss_only * X.shape[0], d2l.accuracy(y_hat, y), X.shape[0])
             timer.stop()
-            # 从error中扣除激活函数正则项，避免其影响最终的误差衡量
-            train_l = metric[0] / metric[2] - rt_for_activation_function_v4(net.module, Relpu3,
-                                                                            a_control,
-                                                                            b_control1, b_control2, b_control3)
+            train_l = metric[0] / metric[2]
             train_acc = metric[1] / metric[2]
             if (i + 1) % (num_batches // 5) == 0 or i == num_batches - 1:
                 animator.add(epoch + (i + 1) / num_batches,
