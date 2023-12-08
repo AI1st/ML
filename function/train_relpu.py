@@ -60,11 +60,10 @@ def rt_for_activation_function_v5(model, activation_version, a_control, b_contro
     b_sum = 0
     for layer in layers:
         for name, param in layer.named_parameters():
-            for name, param in layer.named_parameters():
-                if name == "weight_a":
-                    a_sum += a_control * torch.square(param).mean()
-                elif name == "weight_b":
-                    b_sum += b_control1 * torch.pow(b_control2, b_control3 * torch.square(param - 1)).mean()
+            if name == "weight_a":
+                a_sum += a_control * torch.square(param).mean()
+            elif name == "weight_b":
+                b_sum += b_control1 * torch.pow(b_control2, b_control3 * torch.square(param - 1)).mean()
     return a_sum + b_sum
 
 
