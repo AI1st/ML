@@ -163,9 +163,10 @@ class Train:
     def single_epoch(self, data_iter, train_flag):
         metric = Accumulator(2)  # 第一项为累加次数，第二项为总误差
         for k in data_iter:
-            l = self.single_batch(train_flag, *k)  # 此时k为列表，通过*拆包
-            metric.add(1, l.detach().sum())
-        loss_in_one_epoch = metric[1] / self.total_number_of_samples
+            batch_size = k[0].shape[0]  # 取样本的第一个维度
+            l = self.single_batch(train_flag, *k) * batch_size  # 此时k为列表，通过*拆包
+            metric.add(batch_size, l.detach().sum())
+        loss_in_one_epoch = metric[1] / metric[0]
         return loss_in_one_epoch
 
     def single_batch(self, train_flag, *k):  # 不限输入的参数
